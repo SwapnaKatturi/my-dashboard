@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel — your daily instrument cluster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<style>
+  :root{
+    --bg: #12171B;
+    --panel: #1B2227;
+    --panel-line: #2A333A;
+    --ink: #ECE8DE;
+    --ink-dim: #9AA5AB;
+    --amber: #E8A33D;
+    --teal: #5CADA8;
+    --brick: #C1594E;
+    --font-display: 'Fraunces', serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+  :root:not([data-theme="light"]){ color-scheme: dark; }
+  :root[data-theme="light"]{
+    --bg: #F3F1EA;
+    --panel: #FFFFFF;
+    --panel-line: #DDD8CB;
+    --ink: #1B2227;
+    --ink-dim: #6B6357;
+    --amber: #B5750E;
+    --teal: #2E7873;
+    --brick: #A23F35;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg: #F3F1EA;
+      --panel: #FFFFFF;
+      --panel-line: #DDD8CB;
+      --ink: #1B2227;
+      --ink-dim: #6B6357;
+      --amber: #B5750E;
+      --teal: #2E7873;
+      --brick: #A23F35;
+    }
+  }
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  #root{ max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  .masthead{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    gap: 16px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--panel-line);
+    padding-bottom: 18px; margin-bottom: 22px;
+  }
+  .masthead h1{
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: clamp(28px, 4vw, 40px);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .masthead .sub{ color: var(--ink-dim); font-size: 14px; margin-top: 4px; }
+  .clock{
+    font-family: var(--font-mono);
+    font-size: 15px;
+    color: var(--ink-dim);
+    text-align: right;
+    line-height: 1.5;
+  }
+  .clock strong{ color: var(--ink); font-size: 17px; display:block; }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+  }
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 6px;
+    padding: 18px 20px;
+    animation: rise 0.5s ease backwards;
+  }
+  @media (prefers-reduced-motion: reduce){ .panel{ animation: none; } }
+  @keyframes rise{ from{ opacity:0; transform: translateY(6px);} to{ opacity:1; transform: translateY(0);} }
+  .panel:nth-child(1){ animation-delay: 0.02s; }
+  .panel:nth-child(2){ animation-delay: 0.08s; }
+  .panel:nth-child(3){ animation-delay: 0.14s; }
+  .panel:nth-child(4){ animation-delay: 0.2s; }
+  .panel:nth-child(5){ animation-delay: 0.26s; }
+
+  .panel h2{
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    margin: 0 0 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 8px;
+  }
+  .panel h2 .tag{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    border: 1px solid var(--panel-line);
+    border-radius: 3px;
+    padding: 1px 6px;
+  }
+
+  .weather{ grid-column: span 4; }
+  .crypto{ grid-column: span 4; }
+  .github{ grid-column: span 4; }
+  .learn{ grid-column: span 7; }
+  .news{ grid-column: span 5; }
+  @media (max-width: 860px){
+    .weather, .crypto, .github, .learn, .news{ grid-column: span 12; }
+  }
+
+  input[type="text"]{
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--panel-line);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    padding: 6px 2px;
+    width: 100%;
+    outline: none;
+  }
+  input[type="text"]:focus{ border-bottom-color: var(--amber); }
+  input[type="text"]::placeholder{ color: var(--ink-dim); }
+
+  .temp-row{ display:flex; align-items:baseline; gap: 10px; margin: 6px 0 2px; }
+  .temp-big{ font-family: var(--font-display); font-size: 52px; line-height: 1; }
+  .temp-place{ color: var(--ink-dim); font-size: 13px; }
+  .temp-desc{ font-size: 14px; color: var(--ink-dim); margin-top: 2px; }
+  .weather-datetime{
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim);
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--panel-line);
+  }
+  .weather-form{ margin-top: 14px; display:flex; gap:8px; }
+  .weather-form button, .github-form button{
+    background: none; border: 1px solid var(--panel-line); color: var(--ink);
+    border-radius: 4px; padding: 6px 12px; font-size: 13px; font-family: var(--font-body);
+    cursor: pointer;
+  }
+  .weather-form button:hover, .github-form button:hover{ border-color: var(--amber); color: var(--amber); }
+
+  .coin-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 10px 0; border-top: 1px solid var(--panel-line);
+  }
+  .coin-row:first-of-type{ border-top:none; }
+  .coin-name{ font-size: 14px; }
+  .coin-symbol{ color: var(--ink-dim); font-family: var(--font-mono); font-size: 11px; margin-left: 6px; }
+  .coin-price{ font-family: var(--font-mono); font-size: 15px; text-align:right; }
+  .coin-change{ font-family: var(--font-mono); font-size: 12px; text-align:right; }
+  .up{ color: var(--teal); }
+  .down{ color: var(--brick); }
+
+  .github-form{ display:flex; gap:8px; margin-bottom: 12px; }
+  .event-row{
+    display:flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--panel-line);
+    font-size: 13px; align-items:flex-start;
+  }
+  .event-row:first-of-type{ border-top:none; }
+  .event-dot{ width:6px; height:6px; border-radius:50%; background: var(--amber); margin-top:6px; flex-shrink:0; }
+  .event-repo{ color: var(--ink-dim); font-family: var(--font-mono); font-size: 11px; }
+
+  .course-list{ list-style:none; margin:0; padding:0; }
+  .course-item{ padding: 11px 0; border-top: 1px solid var(--panel-line); }
+  .course-item:first-of-type{ border-top:none; }
+  .course-item a{ color: var(--ink); text-decoration:none; font-size: 14px; font-weight: 500; }
+  .course-item a:hover{ color: var(--amber); }
+  .course-meta{ font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .course-blurb{ font-size: 13px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; }
+
+  .news-tabs{ display:flex; gap: 4px; margin-bottom: 8px; }
+  .news-tab{
+    background: none; border: 1px solid var(--panel-line); color: var(--ink-dim);
+    border-radius: 4px; padding: 5px 11px; font-size: 12px; font-family: var(--font-body);
+    cursor: pointer;
+  }
+  .news-tab:hover{ color: var(--ink); }
+  .news-tab.active{ color: var(--amber); border-color: var(--amber); }
+  .news-item{ padding: 10px 0; border-top: 1px solid var(--panel-line); }
+  .news-item:first-of-type{ border-top:none; }
+  .news-item a{ color: var(--ink); text-decoration:none; font-size: 14px; line-height:1.4; }
+  .news-item a:hover{ color: var(--amber); }
+  .news-title-demo{ color: var(--ink); font-size: 14px; line-height:1.4; }
+  .news-meta{ font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); margin-top:3px; }
+
+  .loading, .error{ color: var(--ink-dim); font-size: 13px; }
+  .error{ color: var(--brick); }
+  .footer-note{ text-align:center; color: var(--ink-dim); font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+function useClock(){
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+function Masthead(){
+  const now = useClock();
+  const hour = now.getHours();
+  const greeting = hour < 5 ? "Still up" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 21 ? "Good evening" : "Winding down";
+  return (
+    <div className="masthead">
+      <div>
+        <h1>{greeting}.</h1>
+        <div className="sub">Your instrument panel for the day ahead</div>
+      </div>
+      <div className="clock">
+        <strong>{now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</strong>
+        {now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}
+      </div>
+    </div>
+  );
+}
+
+const WEATHER_CODES = {
+  0:"Clear sky", 1:"Mostly clear", 2:"Partly cloudy", 3:"Overcast",
+  45:"Fog", 48:"Fog", 51:"Light drizzle", 53:"Drizzle", 55:"Dense drizzle",
+  61:"Light rain", 63:"Rain", 65:"Heavy rain", 71:"Light snow", 73:"Snow",
+  75:"Heavy snow", 77:"Snow grains", 80:"Rain showers", 81:"Rain showers",
+  82:"Violent showers", 85:"Snow showers", 86:"Snow showers",
+  95:"Thunderstorm", 96:"Thunderstorm", 99:"Thunderstorm"
+};
+
+function Weather(){
+  const [city, setCity] = useState(() => localStorage.getItem('panel-city') || 'Pleasanton');
+  const [inputVal, setInputVal] = useState(city);
+  const [data, setData] = useState(null);
+  const [status, setStatus] = useState('loading');
+  const now = useClock();
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus('loading');
+    (async () => {
+      let geo;
+      try {
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
+        geo = await geoRes.json();
+      } catch (networkErr) {
+        // Fetch itself failed (e.g. blocked network) — fall back to demo data.
+        if (!cancelled) {
+          const hash = Array.from(city.toLowerCase()).reduce((h, c) => ((h * 31) + c.charCodeAt(0)) >>> 0, 0);
+          const codes = [0, 1, 2, 3, 61, 71, 95];
+          setData({
+            temp: 45 + (hash % 55),
+            code: codes[hash % codes.length],
+            place: city,
+            demo: true
+          });
+          setStatus('demo');
+        }
+        return;
+      }
+      if (!geo.results || !geo.results.length) {
+        // The search genuinely succeeded but found no matching city — likely a typo.
+        if (!cancelled) setStatus('notfound');
+        return;
+      }
+      try {
+        const { latitude, longitude, name, admin1 } = geo.results[0];
+        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&temperature_unit=fahrenheit&timezone=auto`);
+        const w = await wRes.json();
+        if (cancelled) return;
+        setData({
+          temp: Math.round(w.current_weather.temperature),
+          code: w.current_weather.weathercode,
+          place: admin1 ? `${name}, ${admin1}` : name,
+          timezone: w.timezone
+        });
+        setStatus('ok');
+      } catch (e) {
+        if (!cancelled) {
+          const hash = Array.from(city.toLowerCase()).reduce((h, c) => ((h * 31) + c.charCodeAt(0)) >>> 0, 0);
+          const codes = [0, 1, 2, 3, 61, 71, 95];
+          setData({
+            temp: 45 + (hash % 55),
+            code: codes[hash % codes.length],
+            place: city,
+            demo: true
+          });
+          setStatus('demo');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [city]);
+
+  function submit(e){
+    e.preventDefault();
+    if (!inputVal.trim()) return;
+    localStorage.setItem('panel-city', inputVal.trim());
+    setCity(inputVal.trim());
+  }
+
+  return (
+    <div className="panel weather">
+      <h2>Weather <span className="tag">{status === 'demo' ? 'demo data' : 'live'}</span></h2>
+      {status === 'loading' && <div className="loading">Reading the sky…</div>}
+      {status === 'notfound' && <div className="error">Couldn't find "{city}" — check the spelling and try again.</div>}
+      {(status === 'ok' || status === 'demo') && data && (
+        <>
+          <div className="temp-row">
+            <span className="temp-big">{data.temp}°</span>
+          </div>
+          <div className="temp-place">{data.place}</div>
+          <div className="temp-desc">{WEATHER_CODES[data.code] || 'Conditions unclear'}</div>
+          <div className="weather-datetime">
+            {data.timezone
+              ? now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: data.timezone }) + ' · ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: data.timezone }) + ' local'
+              : now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (your time — city time zone unknown in demo mode)'}
+          </div>
+        </>
+      )}
+      <form className="weather-form" onSubmit={submit}>
+        <input type="text" value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder="City name" />
+        <button type="submit">Set</button>
+      </form>
+    </div>
+  );
+}
+
+const CRYPTO_LIST = [
+  ['bitcoin','Bitcoin','BTC'], ['ethereum','Ethereum','ETH'], ['solana','Solana','SOL'],
+  ['dogecoin','Dogecoin','DOGE'], ['cardano','Cardano','ADA'], ['ripple','XRP','XRP'],
+  ['litecoin','Litecoin','LTC'], ['polkadot','Polkadot','DOT'], ['avalanche-2','Avalanche','AVAX'],
+  ['chainlink','Chainlink','LINK']
+];
+const STOCK_LIST = [
+  ['AAPL','Apple'], ['MSFT','Microsoft'], ['GOOGL','Alphabet'], ['AMZN','Amazon'],
+  ['NVDA','Nvidia'], ['TSLA','Tesla'], ['META','Meta'], ['NFLX','Netflix'],
+  ['AMD','AMD'], ['INTC','Intel']
+];
+
+function demoCrypto(){
+  const out = {};
+  CRYPTO_LIST.forEach(([id], i) => {
+    const hash = Array.from(id).reduce((h, c) => ((h * 31) + c.charCodeAt(0)) >>> 0, 0);
+    out[id] = { usd: (hash % 60000) / (i === 0 ? 1 : 3) + 0.5, usd_24h_change: ((hash % 900) / 100) - 4.5 };
+  });
+  return out;
+}
+function demoStocks(){
+  const out = {};
+  STOCK_LIST.forEach(([sym]) => {
+    const hash = Array.from(sym).reduce((h, c) => ((h * 31) + c.charCodeAt(0)) >>> 0, 0);
+    out[sym] = { price: 40 + (hash % 460), change: ((hash % 800) / 100) - 4 };
+  });
+  return out;
+}
+
+function Markets(){
+  const [tab, setTab] = useState('crypto');
+  const [cache, setCache] = useState({});
+  const [status, setStatus] = useState({});
+
+  useEffect(() => {
+    if (cache[tab]) return;
+    let cancelled = false;
+    setStatus(s => ({ ...s, [tab]: 'loading' }));
+    (async () => {
+      try {
+        if (tab === 'crypto') {
+          const ids = CRYPTO_LIST.map(c => c[0]).join(',');
+          const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
+          const json = await res.json();
+          if (cancelled) return;
+          setCache(c => ({ ...c, crypto: json }));
+          setStatus(s => ({ ...s, crypto: 'ok' }));
+        } else {
+          // Stooq's CSV quote endpoint — free, keyless, but not all browsers/hosts allow CORS on it.
+          const symbols = STOCK_LIST.map(s => s[0].toLowerCase() + '.us').join('+');
+          const res = await fetch(`https://stooq.com/q/l/?s=${symbols}&f=sd2t2ohlcv&h&e=csv`);
+          const text = await res.text();
+          const rows = text.trim().split('\n').slice(1);
+          const parsed = {};
+          rows.forEach(row => {
+            const cols = row.split(',');
+            const sym = cols[0].replace('.US','').toUpperCase();
+            const close = parseFloat(cols[6]);
+            const open = parseFloat(cols[3]);
+            if (!isNaN(close)) parsed[sym] = { price: close, change: open ? ((close - open) / open) * 100 : 0 };
+          });
+          if (cancelled) return;
+          if (Object.keys(parsed).length === 0) throw new Error('no data');
+          setCache(c => ({ ...c, stocks: parsed }));
+          setStatus(s => ({ ...s, stocks: 'ok' }));
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setCache(c => ({ ...c, [tab]: tab === 'crypto' ? demoCrypto() : demoStocks() }));
+        setStatus(s => ({ ...s, [tab]: 'demo' }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tab]);
+
+  const data = cache[tab];
+  const st = status[tab];
+  const list = tab === 'crypto' ? CRYPTO_LIST : STOCK_LIST;
+
+  return (
+    <div className="panel crypto">
+      <h2>Markets <span className="tag">{st === 'demo' ? 'demo data' : tab === 'crypto' ? 'crypto' : 'stocks'}</span></h2>
+      <div className="news-tabs">
+        <button className={"news-tab " + (tab === 'crypto' ? 'active' : '')} onClick={() => setTab('crypto')}>Crypto</button>
+        <button className={"news-tab " + (tab === 'stocks' ? 'active' : '')} onClick={() => setTab('stocks')}>Stocks</button>
+      </div>
+      {st === 'loading' && <div className="loading">Fetching prices…</div>}
+      {(st === 'ok' || st === 'demo') && data && list.map(entry => {
+        if (tab === 'crypto') {
+          const [id, name, symbol] = entry;
+          const c = data[id];
+          if (!c) return null;
+          const change = c.usd_24h_change;
+          const up = change >= 0;
+          return (
+            <div className="coin-row" key={id}>
+              <div>
+                <span className="coin-name">{name}</span>
+                <span className="coin-symbol">{symbol}</span>
+              </div>
+              <div>
+                <div className="coin-price">${c.usd.toLocaleString(undefined, {maximumFractionDigits: c.usd < 10 ? 4 : 0})}</div>
+                <div className={"coin-change " + (up ? "up" : "down")}>{up ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%</div>
+              </div>
+            </div>
+          );
+        } else {
+          const [symbol, name] = entry;
+          const s = data[symbol];
+          if (!s) return null;
+          const up = s.change >= 0;
+          return (
+            <div className="coin-row" key={symbol}>
+              <div>
+                <span className="coin-name">{name}</span>
+                <span className="coin-symbol">{symbol}</span>
+              </div>
+              <div>
+                <div className="coin-price">${s.price.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                <div className={"coin-change " + (up ? "up" : "down")}>{up ? '▲' : '▼'} {Math.abs(s.change).toFixed(1)}%</div>
+              </div>
+            </div>
+          );
+        }
+      })}
+    </div>
+  );
+}
+
+function GithubActivity(){
+  const [username, setUsername] = useState(() => localStorage.getItem('panel-gh') || '');
+  const [inputVal, setInputVal] = useState(username);
+  const [events, setEvents] = useState(null);
+  const [status, setStatus] = useState(username ? 'loading' : 'empty');
+
+  useEffect(() => {
+    if (!username) { setStatus('empty'); return; }
+    let cancelled = false;
+    setStatus('loading');
+    (async () => {
+      try {
+        const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/events/public?per_page=6`);
+        if (!res.ok) throw new Error('not found');
+        const json = await res.json();
+        if (cancelled) return;
+        setEvents(json.slice(0, 6));
+        setStatus('ok');
+      } catch (e) {
+        if (!cancelled) {
+          setEvents([
+            { id: 'd1', type: 'PushEvent', repo: { name: username + '/website' } },
+            { id: 'd2', type: 'PullRequestEvent', repo: { name: username + '/dashboard' } },
+            { id: 'd3', type: 'WatchEvent', repo: { name: 'facebook/react' } }
+          ]);
+          setStatus('demo');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [username]);
+
+  function submit(e){
+    e.preventDefault();
+    if (!inputVal.trim()) return;
+    localStorage.setItem('panel-gh', inputVal.trim());
+    setUsername(inputVal.trim());
+  }
+
+  function describe(ev){
+    const type = ev.type.replace('Event','');
+    const repo = ev.repo ? ev.repo.name : '';
+    const map = {
+      Push: 'pushed to', PullRequest: 'opened a PR on', Issues: 'opened an issue on',
+      Watch: 'starred', Create: 'created', Fork: 'forked', IssueComment: 'commented on'
+    };
+    return { verb: map[type] || type.toLowerCase(), repo };
+  }
+
+  return (
+    <div className="panel github">
+      <h2>GitHub <span className="tag">{status === 'demo' ? 'demo data' : 'activity'}</span></h2>
+      <form className="github-form" onSubmit={submit}>
+        <input type="text" value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder="GitHub username" />
+        <button type="submit">Go</button>
+      </form>
+      {status === 'empty' && <div className="todo-empty">Add a username to see recent activity.</div>}
+      {status === 'loading' && <div className="loading">Pulling commits…</div>}
+      {(status === 'ok' || status === 'demo') && events && events.length === 0 && <div className="todo-empty">No recent public activity.</div>}
+      {(status === 'ok' || status === 'demo') && events && events.map(ev => {
+        const { verb, repo } = describe(ev);
+        return (
+          <div className="event-row" key={ev.id}>
+            <span className="event-dot"></span>
+            <div>
+              <div>{verb} <span className="event-repo">{repo}</span></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const COURSES = [
+  { title: 'Learn web development', provider: 'MDN Web Docs', url: 'https://developer.mozilla.org/en-US/docs/Learn', blurb: 'The most reliable reference for HTML, CSS, and JS fundamentals — free, no account needed.', category: 'foundations' },
+  { title: 'Responsive Web Design', provider: 'freeCodeCamp', url: 'https://www.freecodecamp.org/learn/2022/responsive-web-design/', blurb: 'Hands-on certification covering HTML/CSS basics through to flexbox and grid.', category: 'foundations' },
+  { title: 'Foundations course', provider: 'The Odin Project', url: 'https://www.theodinproject.com/', blurb: 'A full free curriculum that builds real projects as you go, not just isolated exercises.', category: 'foundations' },
+  { title: 'A Complete Guide to Flexbox', provider: 'CSS-Tricks', url: 'https://css-tricks.com/snippets/css/a-guide-to-flexbox/', blurb: 'The reference nearly every frontend dev bookmarks for layout work.', category: 'css' },
+  { title: 'CSS for JavaScript Developers', provider: 'Josh W. Comeau', url: 'https://css-for-js.dev/', blurb: 'A paid, deep-dive course that explains the *why* behind CSS, not just the syntax.', category: 'css' },
+  { title: 'Learn React', provider: 'react.dev', url: 'https://react.dev/learn', blurb: 'The official React docs — the best starting point now that you\u2019ve got a working app.', category: 'react' },
+  { title: 'Frontend Developer Career Path', provider: 'Scrimba', url: 'https://scrimba.com/learn/frontend', blurb: 'Interactive video lessons where you edit code inside the lesson itself.', category: 'react' },
+  { title: 'Real-world coding challenges', provider: 'Frontend Mentor', url: 'https://www.frontendmentor.io/', blurb: 'Practice building from real designs and comparing your solution to others\u2019.', category: 'practice' },
+  { title: 'JavaScript30', provider: 'Wes Bos', url: 'https://javascript30.com/', blurb: '30 small vanilla-JS projects, one a day, completely free.', category: 'practice' }
+];
+const LEARN_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'foundations', label: 'Foundations' },
+  { id: 'css', label: 'CSS & design' },
+  { id: 'react', label: 'React' },
+  { id: 'practice', label: 'Practice' }
+];
+
+function LearnHub(){
+  const [filter, setFilter] = useState('all');
+  const items = filter === 'all' ? COURSES : COURSES.filter(c => c.category === filter);
+
+  return (
+    <div className="panel learn">
+      <h2>Learn frontend <span className="tag">curated</span></h2>
+      <div className="news-tabs">
+        {LEARN_TABS.map(t => (
+          <button key={t.id} className={"news-tab " + (filter === t.id ? "active" : "")} onClick={() => setFilter(t.id)}>{t.label}</button>
+        ))}
+      </div>
+      <ul className="course-list">
+        {items.map(c => (
+          <li className="course-item" key={c.title}>
+            <a href={c.url} target="_blank" rel="noopener noreferrer">{c.title}</a>
+            <div className="course-meta">{c.provider}</div>
+            <div className="course-blurb">{c.blurb}</div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const NEWS_DEMO = {
+  top: [
+    { id: 'n1', title: 'Show HN: I built a personal dashboard in React', score: 214, by: 'you', url: null },
+    { id: 'n2', title: 'The state of frontend frameworks in 2026', score: 189, by: 'devwriter', url: null },
+    { id: 'n3', title: 'Why static sites are having a comeback', score: 152, by: 'jamstack_fan', url: null },
+    { id: 'n4', title: 'Ask HN: What\u2019s your build setup in 2026?', score: 133, by: 'toolsmith', url: null },
+    { id: 'n5', title: 'A deep dive into browser rendering performance', score: 121, by: 'perfnerd', url: null },
+    { id: 'n6', title: 'Show HN: An open-source note-taking app in 6kb', score: 108, by: 'minimalist', url: null },
+    { id: 'n7', title: 'The hidden cost of over-abstracted codebases', score: 97, by: 'archguy', url: null },
+    { id: 'n8', title: 'Why I switched back to server-rendered HTML', score: 88, by: 'oldschool', url: null },
+    { id: 'n9', title: 'Ask HN: How do you stay focused while coding?', score: 76, by: 'deepworker', url: null },
+    { id: 'n10', title: 'A retrospective on ten years of open source', score: 64, by: 'maintainer', url: null }
+  ],
+  ai: [
+    { id: 'a1', title: 'New open-weight model claims state of the art on reasoning benchmarks', score: 341, by: 'mlwatcher', url: null },
+    { id: 'a2', title: 'A practical guide to evaluating LLM agents in production', score: 198, by: 'evalnerd', url: null },
+    { id: 'a3', title: 'Show HN: Tiny on-device model for real-time transcription', score: 176, by: 'edgeml', url: null },
+    { id: 'a4', title: 'What changed in the latest wave of coding assistants', score: 133, by: 'devtools_fan', url: null },
+    { id: 'a5', title: 'Benchmarking retrieval quality across vector databases', score: 119, by: 'ragfan', url: null },
+    { id: 'a6', title: 'Ask HN: Best resources to learn about AI agents?', score: 104, by: 'curiousdev', url: null },
+    { id: 'a7', title: 'The economics of running your own inference cluster', score: 92, by: 'gpu_owner', url: null },
+    { id: 'a8', title: 'Show HN: A local-first AI notes app', score: 81, by: 'privacyfirst', url: null },
+    { id: 'a9', title: 'Why prompt engineering is becoming context engineering', score: 73, by: 'promptsmith', url: null },
+    { id: 'a10', title: 'A year of building with open-weight models: lessons learned', score: 65, by: 'oss_builder', url: null }
+  ],
+  frontend: [
+    { id: 'f1', title: 'React Compiler moves to stable, no more manual memoization', score: 287, by: 'reactcore', url: null },
+    { id: 'f2', title: 'CSS :has() is now supported everywhere \u2014 here\u2019s how to use it', score: 176, by: 'cssnerd', url: null },
+    { id: 'f3', title: 'Show HN: A lighter alternative to Redux for 2026', score: 142, by: 'stateless', url: null },
+    { id: 'f4', title: 'View Transitions API: a practical guide', score: 121, by: 'motiondev', url: null },
+    { id: 'f5', title: 'Why container queries changed how I write CSS', score: 108, by: 'layoutfan', url: null },
+    { id: 'f6', title: 'Ask HN: Vue vs React vs Svelte in 2026?', score: 96, by: 'frameworkcurious', url: null },
+    { id: 'f7', title: 'Show HN: A CSS-only component library, zero JS', score: 87, by: 'cssfirst', url: null },
+    { id: 'f8', title: 'The rise of islands architecture for content sites', score: 79, by: 'astro_fan', url: null },
+    { id: 'f9', title: 'Debugging layout shift: a field guide', score: 68, by: 'perfdev', url: null },
+    { id: 'f10', title: 'What TypeScript 6.0 changes for everyday devs', score: 61, by: 'typesafe', url: null }
+  ]
+};
+const NEWS_TABS = [
+  { id: 'top', label: 'Top stories', query: null },
+  { id: 'ai', label: 'AI updates', query: 'AI' },
+  { id: 'frontend', label: 'Frontend updates', query: 'React OR CSS OR JavaScript OR frontend' }
+];
+
+function News(){
+  const [tab, setTab] = useState('top');
+  const [cache, setCache] = useState({});
+  const [status, setStatus] = useState({});
+
+  useEffect(() => {
+    if (cache[tab]) return;
+    let cancelled = false;
+    setStatus(s => ({ ...s, [tab]: 'loading' }));
+    (async () => {
+      try {
+        let items;
+        const tabDef = NEWS_TABS.find(t => t.id === tab);
+        if (!tabDef.query) {
+          const idsRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+          const ids = await idsRes.json();
+          items = await Promise.all(ids.slice(0, 10).map(id =>
+            fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`).then(r => r.json())
+          ));
+        } else {
+          const res = await fetch(`https://hn.algolia.com/api/v1/search?tags=story&query=${encodeURIComponent(tabDef.query)}&numericFilters=points%3E20`);
+          const json = await res.json();
+          items = json.hits.slice(0, 10).map(h => ({
+            id: h.objectID, title: h.title, score: h.points, by: h.author, url: h.url
+          }));
+        }
+        if (cancelled) return;
+        setCache(c => ({ ...c, [tab]: items }));
+        setStatus(s => ({ ...s, [tab]: 'ok' }));
+      } catch (e) {
+        if (cancelled) return;
+        setCache(c => ({ ...c, [tab]: NEWS_DEMO[tab] }));
+        setStatus(s => ({ ...s, [tab]: 'demo' }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tab]);
+
+  const stories = cache[tab];
+  const st = status[tab];
+  const tabLabel = NEWS_TABS.find(t => t.id === tab).label;
+
+  return (
+    <div className="panel news">
+      <h2>
+        Headlines
+        <span className="tag">{st === 'demo' ? 'demo data' : tab === 'top' ? 'Hacker News' : tabLabel}</span>
+      </h2>
+      <div className="news-tabs">
+        {NEWS_TABS.map(t => (
+          <button key={t.id} className={"news-tab " + (tab === t.id ? 'active' : '')} onClick={() => setTab(t.id)}>{t.label}</button>
+        ))}
+      </div>
+      {st === 'loading' && <div className="loading">Loading headlines…</div>}
+      {(st === 'ok' || st === 'demo') && stories && stories.map(s => s && (
+        <div className="news-item" key={s.id}>
+          {st === 'demo'
+            ? <span className="news-title-demo">{s.title}</span>
+            : <a href={s.url || `https://news.ycombinator.com/item?id=${s.id}`} target="_blank" rel="noopener noreferrer">{s.title}</a>
+          }
+          <div className="news-meta">{s.score || 0} points · {s.by}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function App(){
+  return (
+    <div>
+      <Masthead />
+      <div className="grid">
+        <Weather />
+        <Markets />
+        <GithubActivity />
+        <LearnHub />
+        <News />
+      </div>
+      <div className="footer-note">Panel · built with React · data from Open-Meteo, CoinGecko, GitHub & Hacker News</div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
