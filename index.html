@@ -186,6 +186,12 @@
   .course-item a:hover{ color: var(--amber); }
   .course-meta{ font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
   .course-blurb{ font-size: 13px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; }
+  .todo-empty{ color: var(--ink-dim); font-size: 13px; }
+  .change-key-link{
+    background:none; border:none; color: var(--ink-dim); cursor:pointer;
+    font-size: 11px; font-family: var(--font-mono); padding: 10px 0 0; text-decoration: underline;
+  }
+  .change-key-link:hover{ color: var(--amber); }
 
   .news-tabs{ display:flex; gap: 4px; margin-bottom: 8px; }
   .news-tab{
@@ -378,100 +384,155 @@ function demoStocks(){
 
 function Markets(){
   const [tab, setTab] = useState('crypto');
+  const [stockKey, setStockKey] = useState(() => localStorage.getItem('panel-stock-key') || '');
+  const [keyInput, setKeyInput] = useState(stockKey);
+  const [editingKey, setEditingKey] = useState(!stockKey);
   const [cache, setCache] = useState({});
   const [status, setStatus] = useState({});
 
+  // Crypto — CoinGecko, keyless, browser-friendly.
   useEffect(() => {
-    if (cache[tab]) return;
+    if (tab !== 'crypto' || cache.crypto) return;
     let cancelled = false;
-    setStatus(s => ({ ...s, [tab]: 'loading' }));
+    setStatus(s => ({ ...s, crypto: 'loading' }));
     (async () => {
       try {
-        if (tab === 'crypto') {
-          const ids = CRYPTO_LIST.map(c => c[0]).join(',');
-          const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
-          const json = await res.json();
-          if (cancelled) return;
-          setCache(c => ({ ...c, crypto: json }));
-          setStatus(s => ({ ...s, crypto: 'ok' }));
-        } else {
-          // Stooq's CSV quote endpoint — free, keyless, but not all browsers/hosts allow CORS on it.
-          const symbols = STOCK_LIST.map(s => s[0].toLowerCase() + '.us').join('+');
-          const res = await fetch(`https://stooq.com/q/l/?s=${symbols}&f=sd2t2ohlcv&h&e=csv`);
-          const text = await res.text();
-          const rows = text.trim().split('\n').slice(1);
-          const parsed = {};
-          rows.forEach(row => {
-            const cols = row.split(',');
-            const sym = cols[0].replace('.US','').toUpperCase();
-            const close = parseFloat(cols[6]);
-            const open = parseFloat(cols[3]);
-            if (!isNaN(close)) parsed[sym] = { price: close, change: open ? ((close - open) / open) * 100 : 0 };
-          });
-          if (cancelled) return;
-          if (Object.keys(parsed).length === 0) throw new Error('no data');
-          setCache(c => ({ ...c, stocks: parsed }));
-          setStatus(s => ({ ...s, stocks: 'ok' }));
-        }
+        const ids = CRYPTO_LIST.map(c => c[0]).join(',');
+        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
+        const json = await res.json();
+        if (cancelled) return;
+        setCache(c => ({ ...c, crypto: json }));
+        setStatus(s => ({ ...s, crypto: 'ok' }));
       } catch (e) {
         if (cancelled) return;
-        setCache(c => ({ ...c, [tab]: tab === 'crypto' ? demoCrypto() : demoStocks() }));
-        setStatus(s => ({ ...s, [tab]: 'demo' }));
+        setCache(c => ({ ...c, crypto: demoCrypto() }));
+        setStatus(s => ({ ...s, crypto: 'demo' }));
       }
     })();
     return () => { cancelled = true; };
   }, [tab]);
 
+  // Stocks — Twelve Data, needs the viewer's own free API key.
+  useEffect(() => {
+    if (tab !== 'stocks' || !stockKey) return;
+    if (cache.stocks && cache.stocksKey === stockKey) return;
+    let cancelled = false;
+    setStatus(s => ({ ...s, stocks: 'loading' }));
+    (async () => {
+      try {
+        const symbols = STOCK_LIST.map(s => s[0]).join(',');
+        const res = await fetch(`https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${encodeURIComponent(stockKey)}`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (json.code && json.code !== 200 && !STOCK_LIST.some(([sym]) => json[sym])) {
+          setStatus(s => ({ ...s, stocks: 'invalid' }));
+          return;
+        }
+        const parsed = {};
+        STOCK_LIST.forEach(([sym]) => {
+          const q = json[sym];
+          if (q && q.close) parsed[sym] = { price: parseFloat(q.close), change: parseFloat(q.percent_change) };
+        });
+        if (Object.keys(parsed).length === 0) {
+          setStatus(s => ({ ...s, stocks: 'invalid' }));
+          return;
+        }
+        setCache(c => ({ ...c, stocks: parsed, stocksKey: stockKey }));
+        setStatus(s => ({ ...s, stocks: 'ok' }));
+        setEditingKey(false);
+      } catch (e) {
+        if (cancelled) return;
+        setCache(c => ({ ...c, stocks: demoStocks() }));
+        setStatus(s => ({ ...s, stocks: 'demo' }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tab, stockKey]);
+
+  function saveKey(e){
+    e.preventDefault();
+    if (!keyInput.trim()) return;
+    localStorage.setItem('panel-stock-key', keyInput.trim());
+    setStockKey(keyInput.trim());
+    setEditingKey(false);
+  }
+
   const data = cache[tab];
   const st = status[tab];
   const list = tab === 'crypto' ? CRYPTO_LIST : STOCK_LIST;
+  const stocksTag = st === 'demo' ? 'demo data' : st === 'invalid' ? 'invalid key' : 'stocks';
 
   return (
     <div className="panel crypto">
-      <h2>Markets <span className="tag">{st === 'demo' ? 'demo data' : tab === 'crypto' ? 'crypto' : 'stocks'}</span></h2>
+      <h2>Markets <span className="tag">{tab === 'crypto' ? (st === 'demo' ? 'demo data' : 'crypto') : stocksTag}</span></h2>
       <div className="news-tabs">
         <button className={"news-tab " + (tab === 'crypto' ? 'active' : '')} onClick={() => setTab('crypto')}>Crypto</button>
         <button className={"news-tab " + (tab === 'stocks' ? 'active' : '')} onClick={() => setTab('stocks')}>Stocks</button>
       </div>
-      {st === 'loading' && <div className="loading">Fetching prices…</div>}
-      {(st === 'ok' || st === 'demo') && data && list.map(entry => {
-        if (tab === 'crypto') {
-          const [id, name, symbol] = entry;
-          const c = data[id];
-          if (!c) return null;
-          const change = c.usd_24h_change;
-          const up = change >= 0;
-          return (
-            <div className="coin-row" key={id}>
-              <div>
-                <span className="coin-name">{name}</span>
-                <span className="coin-symbol">{symbol}</span>
+
+      {tab === 'crypto' && (
+        <>
+          {st === 'loading' && <div className="loading">Fetching prices…</div>}
+          {(st === 'ok' || st === 'demo') && data && list.map(([id, name, symbol]) => {
+            const c = data[id];
+            if (!c) return null;
+            const change = c.usd_24h_change;
+            const up = change >= 0;
+            return (
+              <div className="coin-row" key={id}>
+                <div>
+                  <span className="coin-name">{name}</span>
+                  <span className="coin-symbol">{symbol}</span>
+                </div>
+                <div>
+                  <div className="coin-price">${c.usd.toLocaleString(undefined, {maximumFractionDigits: c.usd < 10 ? 4 : 0})}</div>
+                  <div className={"coin-change " + (up ? "up" : "down")}>{up ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%</div>
+                </div>
               </div>
-              <div>
-                <div className="coin-price">${c.usd.toLocaleString(undefined, {maximumFractionDigits: c.usd < 10 ? 4 : 0})}</div>
-                <div className={"coin-change " + (up ? "up" : "down")}>{up ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%</div>
-              </div>
+            );
+          })}
+        </>
+      )}
+
+      {tab === 'stocks' && (
+        <>
+          {(editingKey || status.stocks === 'invalid') && (
+            <form className="weather-form" onSubmit={saveKey} style={{marginBottom: '12px'}}>
+              <input type="text" value={keyInput} onChange={e => setKeyInput(e.target.value)} placeholder="Twelve Data API key" />
+              <button type="submit">Save</button>
+            </form>
+          )}
+          {!stockKey && !editingKey && (
+            <div className="todo-empty">
+              Get a free key at <a href="https://twelvedata.com/pricing" target="_blank" rel="noopener noreferrer" style={{color:'var(--amber)'}}>twelvedata.com</a> to see live stock prices.
             </div>
-          );
-        } else {
-          const [symbol, name] = entry;
-          const s = data[symbol];
-          if (!s) return null;
-          const up = s.change >= 0;
-          return (
-            <div className="coin-row" key={symbol}>
-              <div>
-                <span className="coin-name">{name}</span>
-                <span className="coin-symbol">{symbol}</span>
+          )}
+          {status.stocks === 'invalid' && (
+            <div className="error" style={{marginBottom:'10px'}}>That key didn't work — double check it and save again.</div>
+          )}
+          {status.stocks === 'loading' && <div className="loading">Fetching prices…</div>}
+          {(status.stocks === 'ok' || status.stocks === 'demo') && data && !editingKey && list.map(([symbol, name]) => {
+            const s = data[symbol];
+            if (!s) return null;
+            const up = s.change >= 0;
+            return (
+              <div className="coin-row" key={symbol}>
+                <div>
+                  <span className="coin-name">{name}</span>
+                  <span className="coin-symbol">{symbol}</span>
+                </div>
+                <div>
+                  <div className="coin-price">${s.price.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                  <div className={"coin-change " + (up ? "up" : "down")}>{up ? '▲' : '▼'} {Math.abs(s.change).toFixed(1)}%</div>
+                </div>
               </div>
-              <div>
-                <div className="coin-price">${s.price.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-                <div className={"coin-change " + (up ? "up" : "down")}>{up ? '▲' : '▼'} {Math.abs(s.change).toFixed(1)}%</div>
-              </div>
-            </div>
-          );
-        }
-      })}
+            );
+          })}
+          {stockKey && !editingKey && status.stocks !== 'invalid' && (
+            <button className="change-key-link" onClick={() => setEditingKey(true)}>Change API key</button>
+          )}
+        </>
+      )}
     </div>
   );
 }
