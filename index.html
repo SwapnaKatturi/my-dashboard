@@ -413,27 +413,34 @@ function Markets(){
   }, [tab]);
 
   // Stocks — Twelve Data, needs the viewer's own free API key.
+  const [stockError, setStockError] = useState('');
   useEffect(() => {
     if (tab !== 'stocks' || !stockKey) return;
     if (cache.stocks && cache.stocksKey === stockKey) return;
     let cancelled = false;
     setStatus(s => ({ ...s, stocks: 'loading' }));
+    setStockError('');
     (async () => {
       try {
         const symbols = STOCK_LIST.map(s => s[0]).join(',');
         const res = await fetch(`https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${encodeURIComponent(stockKey)}`);
         const json = await res.json();
         if (cancelled) return;
+        console.log('Twelve Data response:', json);
         if (json.code && json.code !== 200 && !STOCK_LIST.some(([sym]) => json[sym])) {
+          setStockError(`${json.code}: ${json.message || 'Unknown error'}`);
           setStatus(s => ({ ...s, stocks: 'invalid' }));
           return;
         }
         const parsed = {};
+        let lastError = '';
         STOCK_LIST.forEach(([sym]) => {
           const q = json[sym];
           if (q && q.close) parsed[sym] = { price: parseFloat(q.close), change: parseFloat(q.percent_change) };
+          else if (q && q.message) lastError = `${sym}: ${q.message}`;
         });
         if (Object.keys(parsed).length === 0) {
+          setStockError(lastError || 'No symbols returned valid data.');
           setStatus(s => ({ ...s, stocks: 'invalid' }));
           return;
         }
@@ -442,6 +449,7 @@ function Markets(){
         setEditingKey(false);
       } catch (e) {
         if (cancelled) return;
+        setStockError('Network/CORS error: ' + e.message);
         setCache(c => ({ ...c, stocks: demoStocks() }));
         setStatus(s => ({ ...s, stocks: 'demo' }));
       }
@@ -508,7 +516,7 @@ function Markets(){
             </div>
           )}
           {status.stocks === 'invalid' && (
-            <div className="error" style={{marginBottom:'10px'}}>That key didn't work — double check it and save again.</div>
+            <div className="error" style={{marginBottom:'10px'}}>{stockError || "That key didn't work — double check it and save again."}</div>
           )}
           {status.stocks === 'loading' && <div className="loading">Fetching prices…</div>}
           {(status.stocks === 'ok' || status.stocks === 'demo') && data && !editingKey && list.map(([symbol, name]) => {
